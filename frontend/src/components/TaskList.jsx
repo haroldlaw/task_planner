@@ -1,6 +1,6 @@
 import TaskItem from "./TaskItem";
 
-export default function TaskList({ tasks, onToggle, onDelete, loading }) {
+export default function TaskList({ tasks, onToggle, onDelete, onEdit, loading }) {
   if (loading) {
     return <div className="empty-state">loading tasks…</div>;
   }
@@ -16,7 +16,7 @@ export default function TaskList({ tasks, onToggle, onDelete, loading }) {
   return (
     <div className="task-list">
       {tasks.map((task) => (
-        <TaskItem key={task.id} task={task} onToggle={onToggle} onDelete={onDelete} />
+        <TaskItem key={task.id} task={task} onToggle={onToggle} onDelete={onDelete} onEdit={onEdit} />
       ))}
     </div>
   );

@@ -1,13 +1,36 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../api";
 
-export default function TaskForm({ tags, onTagsChanged, onCreated }) {
+export default function TaskForm({ tags, onTagsChanged, onCreated, editingTask, onUpdated, onCancelEdit  }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("medium");
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const isEditing = Boolean(editingTask);
+
+  // when user clicks edit, pre-fill the form; when edit mode is cleared, reset it
+  useEffect(() => {
+    if (editingTask) {
+      setTitle(editingTask.title);
+      setDescription(editingTask.description || "");
+      setDueDate(editingTask.due_date ? editingTask.due_date.slice(0, 16) : "");
+      setPriority(editingTask.priority);
+      setTagInput((editingTask.tags || []).map((t) => t.name).join(", "));
+    } else {
+      resetForm();
+    }
+  }, [editingTask]);
+
+  function resetForm() {
+    setTitle("");
+    setDescription("");
+    setDueDate("");
+    setPriority("medium");
+    setTagInput("");
+  }
 
   async function resolveTagIds(names) {
     const existingByName = new Map(
@@ -43,43 +66,59 @@ export default function TaskForm({ tags, onTagsChanged, onCreated }) {
         .filter(Boolean);
       const tag_ids = await resolveTagIds(tagNames);
 
-      const optimisticTask = {
-        id: `temp-${Date.now()}`,
+      const payload = {
         title,
         description: description || null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
         priority,
-        status: "todo",
-        created_at: new Date().toISOString(),
-        completed_at: null,
-        tags: tagNames.map((n) => ({ id: `temp-${n}`, name: n })),
-      };
-      onCreated(optimisticTask);
-
-      const saved = await api.createTask({
-        title,
-        description: description || null,
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
-        priority,
-        status: "todo",
         tag_ids,
-      });
-      onCreated(saved, optimisticTask.id);
+      };
 
-      setTitle("");
-      setDescription("");
-      setDueDate("");
-      setPriority("medium");
-      setTagInput("");
+      if (isEditing) {
+        // NEW: edit mode — PUT to the existing task instead of creating a new one
+        const updated = await api.updateTask(editingTask.id, payload);
+        onUpdated(updated);
+      } else {
+        const optimisticTask = {
+          id: `temp-${Date.now()}`,
+          ...payload,
+          status: "todo",
+          created_at: new Date().toISOString(),
+          completed_at: null,
+          tags: tagNames.map((n) => ({ id: `temp-${n}`, name: n })),
+        };
+        onCreated(optimisticTask);
+        const saved = await api.createTask({ ...payload, status: "todo" });
+        onCreated(saved, optimisticTask.id);
+      }
+
+      resetForm();
     } catch (err) {
-      onCreated(null, null, err.message);
+      if (isEditing) {
+        alert(`Could not save changes: ${err.message}`);
+      } else {
+        onCreated(null, null, err.message);
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
+  function handleCancel() {
+    resetForm();
+    onCancelEdit();
+  }
+
   return (
     <form className="task-form card" onSubmit={handleSubmit}>
+      {isEditing && (
+        <div className="editing-banner">
+          Editing "{editingTask.title}"
+          <button type="button" className="link-button" onClick={handleCancel}>
+            Cancel
+          </button>
+        </div>
+      )}
       <div className="row">
         <input
           className="title-input"
@@ -118,7 +157,7 @@ export default function TaskForm({ tags, onTagsChanged, onCreated }) {
           style={{ flex: 1 }}
         />
         <button className="btn-primary" type="submit" disabled={submitting}>
-          {submitting ? "Adding…" : "Add task"}
+          {submitting ? "Saving…" : isEditing ? "Save changes" : "Add task"}
         </button>
       </div>
     </form>

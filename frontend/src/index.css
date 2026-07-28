@@ -526,3 +526,35 @@ button:focus-visible,
   color: var(--ink-muted);
   text-align: center;
 }
+
+/* -------------------- Editing banner (TaskForm) -------------------- */
+
+.editing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+/* -------------------- Due today styling -------------------- */
+
+.task-meta .due-today {
+  color: var(--priority-medium);
+  font-weight: 500;
+}
+
+/* -------------------- Unused tag rows -------------------- */
+
+.unused-tag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  font-size: 13.5px;
+  color: var(--ink-muted);
+}

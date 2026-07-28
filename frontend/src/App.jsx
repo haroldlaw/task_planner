@@ -16,6 +16,7 @@ export default function App() {
   const [tags, setTags] = useState([]);
   const [stats, setStats] = useState(null);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [editingTask, setEditingTask] = useState(null); 
   const [filters, setFilters] = useState({
     status: undefined,
     priority: undefined,
@@ -71,6 +72,12 @@ export default function App() {
     }
   }
 
+  function handleTaskUpdated(updatedTask) {
+    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+    setEditingTask(null);
+    loadStats();
+  }
+
   async function handleToggle(task) {
     const previous = tasks;
     const nowDone = task.status !== "done";
@@ -94,6 +101,7 @@ export default function App() {
   async function handleDelete(task) {
     const previous = tasks;
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    if (editingTask?.id === task.id) setEditingTask(null);
     try {
       await api.deleteTask(task.id);
       loadStats();
@@ -102,6 +110,22 @@ export default function App() {
       alert(`Could not delete task: ${err.message}`);
     }
   }
+
+  async function handleDeleteTag(tagId) {
+    if (!window.confirm("Delete this tag? It will be removed from any tasks using it.")) return;
+    const previous = tags;
+    setTags((prev) => prev.filter((t) => t.id !== tagId));
+    try {
+      await api.deleteTag(tagId);
+    } catch (err) {
+      setTags(previous);
+      alert(`Could not delete tag: ${err.message}`);
+    }
+  }
+
+  const unusedTags = tags.filter(
+    (tag) => !tasks.some((task) => task.tags?.some((t) => t.id === tag.id))
+  );
 
   if (authLoading) return null;
 
@@ -138,8 +162,15 @@ export default function App() {
           taskCountByStatus={stats?.status_breakdown}
         />
         <div>
-          <TaskForm tags={tags} onTagsChanged={loadTags} onCreated={handleTaskCreated} />
-          <TaskList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} loading={tasksLoading} />
+          <TaskForm
+            tags={tags}
+            onTagsChanged={loadTags}
+            onCreated={handleTaskCreated}
+            editingTask={editingTask}
+            onUpdated={handleTaskUpdated}
+            onCancelEdit={() => setEditingTask(null)}
+          />
+          <TaskList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} onEdit={setEditingTask} loading={tasksLoading} />
         </div>
       </div>
     </div>
