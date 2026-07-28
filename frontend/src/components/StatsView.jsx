@@ -63,7 +63,7 @@ export default function StatsView({ stats }) {
       {stats.total_tasks > 0 && (
         <div className="charts-row">
           <div className="card chart-card">
-            <h4>By status</h4>
+            <h4>Task Status</h4>
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
                 <Pie
@@ -83,7 +83,7 @@ export default function StatsView({ stats }) {
             </ResponsiveContainer>
           </div>
           <div className="card chart-card">
-            <h4>By priority</h4>
+            <h4>Task Priority</h4>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={priorityData}>
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#5b6270" }} axisLine={false} tickLine={false} />

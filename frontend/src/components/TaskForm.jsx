@@ -1,6 +1,5 @@
 import { useState } from "react";
-
-let mockIdCounter = 1000; // simple incrementing fake ID generator for mock mode
+import { api } from "../api";
 
 export default function TaskForm({ tags, onTagsChanged, onCreated }) {
   const [title, setTitle] = useState("");
@@ -8,56 +7,75 @@ export default function TaskForm({ tags, onTagsChanged, onCreated }) {
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("medium");
   const [tagInput, setTagInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  // MOCK VERSION: resolves tag names to tag objects using only local state,
-  // no api.createTag() call. Creates a new fake tag if the name doesn't exist yet.
-  function resolveTags(names) {
-    const existingByName = new Map(tags.map((t) => [t.name.toLowerCase(), t]));
-    const resolved = [];
-    const newlyCreated = [];
+  async function resolveTagIds(names) {
+    const existingByName = new Map(
+      tags.map((t) => [t.name.toLowerCase(), t.id]),
+    );
+    const ids = [];
+    let changed = false;
     for (const rawName of names) {
       const name = rawName.trim();
       if (!name) continue;
-      const existing = existingByName.get(name.toLowerCase());
-      if (existing) {
-        resolved.push(existing);
+      const existingId = existingByName.get(name.toLowerCase());
+      if (existingId) {
+        ids.push(existingId);
       } else {
-        const newTag = { id: mockIdCounter++, name };
-        resolved.push(newTag);
-        newlyCreated.push(newTag);
+        const newTag = await api.createTag(name);
+        ids.push(newTag.id);
+        changed = true;
       }
     }
-    if (newlyCreated.length > 0) onTagsChanged(newlyCreated);
-    return resolved;
+    if (changed) onTagsChanged();
+    return ids;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!title.trim()) return;
+    setSubmitting(true);
 
-    const tagNames = tagInput.split(",").map((t) => t.trim()).filter(Boolean);
-    const taskTags = resolveTags(tagNames);
+    try {
+      const tagNames = tagInput
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const tag_ids = await resolveTagIds(tagNames);
 
-    // MOCK VERSION: no server round-trip — the task is "created" immediately
-    // and permanently, since there's nothing to reconcile against yet.
-    const newTask = {
-      id: mockIdCounter++,
-      title,
-      description: description || null,
-      due_date: dueDate ? new Date(dueDate).toISOString() : null,
-      priority,
-      status: "todo",
-      created_at: new Date().toISOString(),
-      completed_at: null,
-      tags: taskTags,
-    };
-    onCreated(newTask);
+      const optimisticTask = {
+        id: `temp-${Date.now()}`,
+        title,
+        description: description || null,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        priority,
+        status: "todo",
+        created_at: new Date().toISOString(),
+        completed_at: null,
+        tags: tagNames.map((n) => ({ id: `temp-${n}`, name: n })),
+      };
+      onCreated(optimisticTask);
 
-    setTitle("");
-    setDescription("");
-    setDueDate("");
-    setPriority("medium");
-    setTagInput("");
+      const saved = await api.createTask({
+        title,
+        description: description || null,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        priority,
+        status: "todo",
+        tag_ids,
+      });
+      onCreated(saved, optimisticTask.id);
+
+      setTitle("");
+      setDescription("");
+      setDueDate("");
+      setPriority("medium");
+      setTagInput("");
+    } catch (err) {
+      onCreated(null, null, err.message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -99,8 +117,8 @@ export default function TaskForm({ tags, onTagsChanged, onCreated }) {
           onChange={(e) => setTagInput(e.target.value)}
           style={{ flex: 1 }}
         />
-        <button className="btn-primary" type="submit">
-          Add task
+        <button className="btn-primary" type="submit" disabled={submitting}>
+          {submitting ? "Adding…" : "Add task"}
         </button>
       </div>
     </form>

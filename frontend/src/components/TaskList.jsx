@@ -8,7 +8,7 @@ export default function TaskList({ tasks, onToggle, onDelete, loading }) {
   if (tasks.length === 0) {
     return (
       <div className="empty-state">
-        no tasks match these filters — add one above, or clear a filter
+        no tasks match these filters
       </div>
     );
   }
