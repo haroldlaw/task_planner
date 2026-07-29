@@ -76,26 +76,6 @@ export default function FilterBar({ filters, setFilters, tags, taskCountByStatus
         </div>
       )}
 
-      {unusedTags && unusedTags.length > 0 && (
-        <div className="card sidebar-section">
-          <h3>Unused tags</h3>
-          <div className="filter-group">
-            {unusedTags.map((tag) => (
-              <div key={tag.id} className="unused-tag-row">
-                <span>{tag.name}</span>
-                <button
-                  className="icon-btn"
-                  onClick={() => onDeleteTag(tag.id)}
-                  aria-label={`Delete unused tag ${tag.name}`}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="card sidebar-section">
         <h3>Sort by</h3>
         <div className="filter-group">

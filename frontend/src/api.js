@@ -54,6 +54,7 @@ export const api = {
 
   listTags: () => request("/tags"),
   createTag: (name) => request("/tags", { method: "POST", body: { name } }),
+  deleteTag: (id) => request(`/tags/${id}`, { method: "DELETE" }),
 
   getStats: () => request("/stats"),
 };

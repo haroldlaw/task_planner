@@ -99,17 +99,31 @@ export default function App() {
   }
 
   async function handleDelete(task) {
-    const previous = tasks;
-    setTasks((prev) => prev.filter((t) => t.id !== task.id));
-    if (editingTask?.id === task.id) setEditingTask(null);
-    try {
-      await api.deleteTask(task.id);
-      loadStats();
-    } catch (err) {
-      setTasks(previous);
-      alert(`Could not delete task: ${err.message}`);
+  const previous = tasks;
+  const deletedTaskTagIds = (task.tags || []).map((t) => t.id);
+  setTasks((prev) => prev.filter((t) => t.id !== task.id));
+  if (editingTask?.id === task.id) setEditingTask(null);
+  try {
+    await api.deleteTask(task.id);
+    loadStats();
+
+    // after deleting, check if any of this task's tags are now unused
+    // by any remaining task, and delete them automatically
+    const remainingTasks = tasks.filter((t) => t.id !== task.id);
+    const tagsToRemove = deletedTaskTagIds.filter(
+      (tagId) => !remainingTasks.some((t) => t.tags?.some((tag) => tag.id === tagId))
+    );
+    for (const tagId of tagsToRemove) {
+      await api.deleteTag(tagId);
     }
+    if (tagsToRemove.length > 0) {
+      setTags((prev) => prev.filter((t) => !tagsToRemove.includes(t.id)));
+    }
+  } catch (err) {
+    setTasks(previous);
+    alert(`Could not delete task: ${err.message}`);
   }
+}
 
   async function handleDeleteTag(tagId) {
     if (!window.confirm("Delete this tag? It will be removed from any tasks using it.")) return;
@@ -160,6 +174,8 @@ export default function App() {
           setFilters={setFilters}
           tags={tags}
           taskCountByStatus={stats?.status_breakdown}
+          unusedTags={unusedTags}
+          onDeleteTag={handleDeleteTag}
         />
         <div>
           <TaskForm
