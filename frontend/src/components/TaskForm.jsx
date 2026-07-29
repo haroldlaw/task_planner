@@ -1,10 +1,23 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 
+function getDefaultDueDateValue() {
+  const now = new Date();
+  now.setHours(23, 59, 0, 0);
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export default function TaskForm({ tags, onTagsChanged, onCreated, editingTask, onUpdated, onCancelEdit  }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(getDefaultDueDateValue());
   const [priority, setPriority] = useState("medium");
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +40,7 @@ export default function TaskForm({ tags, onTagsChanged, onCreated, editingTask, 
   function resetForm() {
     setTitle("");
     setDescription("");
-    setDueDate("");
+    setDueDate(getDefaultDueDateValue());
     setPriority("medium");
     setTagInput("");
   }
@@ -69,7 +82,7 @@ export default function TaskForm({ tags, onTagsChanged, onCreated, editingTask, 
       const payload = {
         title,
         description: description || null,
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        due_date: dueDate || null,
         priority,
         tag_ids,
       };
