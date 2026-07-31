@@ -23,7 +23,7 @@ function isSameDay(a, b) {
   );
 }
 
-export default function TaskItem({ task, onToggle, onDelete, onEdit }) {
+export default function TaskItem({ task, selected, onSelect, onToggle, onDelete, onEdit }) {
   const isDone = task.status === "done";
   const dueDate = task.due_date ? new Date(task.due_date) : null;
   const now = new Date();
@@ -40,15 +40,15 @@ export default function TaskItem({ task, onToggle, onDelete, onEdit }) {
 
   return (
     <div
-      className={`task-row ${isDone ? "done" : ""}`}
+      className={`task-row ${isDone ? "done" : ""} ${selected ? "selected" : ""}`}
       style={{ "--priority-color": PRIORITY_COLOR_VAR[task.priority] }}
     >
       <input
         type="checkbox"
-        className="task-checkbox"
-        checked={isDone}
-        onChange={() => onToggle(task)}
-        aria-label={`Mark "${task.title}" ${isDone ? "not done" : "done"}`}
+        className="task-select-checkbox"
+        checked={selected}
+        onChange={() => onSelect(task.id)}
+        aria-label={`Select task ${task.title}`}
       />
       <div className="task-body">
         <div className="task-title-line">
@@ -80,6 +80,13 @@ export default function TaskItem({ task, onToggle, onDelete, onEdit }) {
         </div>
       </div>
       <div className="task-actions">
+        <input
+          type="checkbox"
+          className="task-checkbox"
+          checked={isDone}
+          onChange={() => onToggle(task)}
+          aria-label={`Mark "${task.title}" ${isDone ? "not done" : "done"}`}
+        />
         <button
           className="icon-btn"
           onClick={() => onEdit(task)}

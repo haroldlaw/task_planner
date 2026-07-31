@@ -45,7 +45,8 @@ export default function App() {
   const [tags, setTags] = useState([]);
   const [stats, setStats] = useState(null);
   const [tasksLoading, setTasksLoading] = useState(true);
-  const [editingTask, setEditingTask] = useState(null); 
+  const [editingTask, setEditingTask] = useState(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
   const [filters, setFilters] = useState({
     search: "",
     status: undefined,
@@ -92,6 +93,10 @@ export default function App() {
   }, [allTasks, filters]);
 
   useEffect(() => {
+    setSelectedTaskIds([]);
+  }, [tasks]);
+
+  useEffect(() => {
     if (!user) return;
     loadTags();
     loadStats();
@@ -119,6 +124,104 @@ export default function App() {
     }
 
     return filteredTasks;
+  }
+
+  function handleSelectTask(taskId) {
+    setSelectedTaskIds((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
+  }
+
+  function handleSelectAll() {
+    const allSelected = tasks.length > 0 && tasks.every((task) => selectedTaskIds.includes(task.id));
+    setSelectedTaskIds(allSelected ? [] : tasks.map((task) => task.id));
+  }
+
+  async function handleBulkMarkDone() {
+    if (selectedTaskIds.length === 0) return;
+
+    const previousAllTasks = allTasks;
+    const updatedTasks = allTasks.map((task) =>
+      selectedTaskIds.includes(task.id)
+        ? { ...task, status: "done", completed_at: new Date().toISOString() }
+        : task
+    );
+
+    setAllTasks(updatedTasks);
+    setTasks(applyTaskFilter(updatedTasks));
+    setSelectedTaskIds([]);
+
+    try {
+      await Promise.all(
+        selectedTaskIds.map((taskId) => api.updateTask(taskId, { status: "done" }))
+      );
+      loadStats();
+    } catch (err) {
+      setAllTasks(previousAllTasks);
+      setTasks(applyTaskFilter(previousAllTasks));
+      alert(`Could not update selected tasks: ${err.message}`);
+    }
+  }
+
+  async function handleBulkUnmarkDone() {
+    if (selectedTaskIds.length === 0) return;
+
+    const previousAllTasks = allTasks;
+    const updatedTasks = allTasks.map((task) =>
+      selectedTaskIds.includes(task.id)
+        ? { ...task, status: "todo", completed_at: null }
+        : task
+    );
+
+    setAllTasks(updatedTasks);
+    setTasks(applyTaskFilter(updatedTasks));
+    setSelectedTaskIds([]);
+
+    try {
+      await Promise.all(
+        selectedTaskIds.map((taskId) => api.updateTask(taskId, { status: "todo" }))
+      );
+      loadStats();
+    } catch (err) {
+      setAllTasks(previousAllTasks);
+      setTasks(applyTaskFilter(previousAllTasks));
+      alert(`Could not update selected tasks: ${err.message}`);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedTaskIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedTaskIds.length} selected tasks? This cannot be undone.`)) return;
+
+    const previousAllTasks = allTasks;
+    const remainingTasks = allTasks.filter((task) => !selectedTaskIds.includes(task.id));
+    const deletedTaskTagIds = previousAllTasks
+      .filter((task) => selectedTaskIds.includes(task.id))
+      .flatMap((task) => task.tags?.map((tag) => tag.id) || []);
+
+    setAllTasks(remainingTasks);
+    setTasks(applyTaskFilter(remainingTasks));
+    setSelectedTaskIds([]);
+
+    try {
+      await Promise.all(selectedTaskIds.map((taskId) => api.deleteTask(taskId)));
+      await loadStats();
+
+      const tagsToRemove = deletedTaskTagIds.filter(
+        (tagId, index, all) =>
+          all.indexOf(tagId) === index && !remainingTasks.some((task) => task.tags?.some((tag) => tag.id === tagId))
+      );
+      for (const tagId of tagsToRemove) {
+        await api.deleteTag(tagId);
+      }
+      if (tagsToRemove.length > 0) {
+        setTags((prev) => prev.filter((tag) => !tagsToRemove.includes(tag.id)));
+      }
+    } catch (err) {
+      setAllTasks(previousAllTasks);
+      setTasks(applyTaskFilter(previousAllTasks));
+      alert(`Could not delete selected tasks: ${err.message}`);
+    }
   }
 
   function handleTaskCreated(task, replaceId, errorMessage) {
@@ -269,7 +372,19 @@ export default function App() {
             onUpdated={handleTaskUpdated}
             onCancelEdit={() => setEditingTask(null)}
           />
-          <TaskList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} onEdit={setEditingTask} loading={tasksLoading} />
+          <TaskList
+            tasks={tasks}
+            selectedTaskIds={selectedTaskIds}
+            onSelectTask={handleSelectTask}
+            onSelectAll={handleSelectAll}
+            onBulkMarkDone={handleBulkMarkDone}
+            onBulkUnmarkDone={handleBulkUnmarkDone}
+            onBulkDelete={handleBulkDelete}
+            onToggle={handleToggle}
+            onDelete={handleDelete}
+            onEdit={setEditingTask}
+            loading={tasksLoading}
+          />
         </div>
       </div>
     </div>
