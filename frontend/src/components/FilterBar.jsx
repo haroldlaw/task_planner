@@ -1,7 +1,7 @@
 const STATUSES = [
   { value: undefined, label: "All tasks" },
   { value: "todo", label: "To do" },
-  { value: "in_progress", label: "In progress" },
+  { value: "overdue", label: "Overdue" },
   { value: "done", label: "Done" },
 ];
 

@@ -12,7 +12,7 @@ import {
 
 const STATUS_COLORS = {
   todo: "#9aa0ac",
-  in_progress: "#33508a",
+  overdue: "#b23a2e",
   done: "#3c7a5b",
 };
 
@@ -22,12 +22,23 @@ const PRIORITY_COLORS = {
   high: "#b23a2e",
 };
 
-const STATUS_LABELS = { todo: "To do", in_progress: "In progress", done: "Done" };
+const STATUS_LABELS = { todo: "To do", overdue: "Overdue", done: "Done" };
 
-export default function StatsView({ stats }) {
+function isOverdueTask(task) {
+  if (!task.due_date || task.status === "done") return false;
+  return new Date(task.due_date) < new Date();
+}
+
+export default function StatsView({ stats, tasks = [] }) {
   if (!stats) return null;
 
-  const statusData = Object.entries(stats.status_breakdown).map(([key, value]) => ({
+  const statusBreakdown = {
+    todo: tasks.filter((task) => task.status !== "done" && !isOverdueTask(task)).length,
+    overdue: tasks.filter(isOverdueTask).length,
+    done: tasks.filter((task) => task.status === "done").length,
+  };
+
+  const statusData = Object.entries(statusBreakdown).map(([key, value]) => ({
     name: STATUS_LABELS[key] || key,
     value,
     key,

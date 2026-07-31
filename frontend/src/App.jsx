@@ -8,10 +8,39 @@ import TaskList from "./components/TaskList";
 import FilterBar from "./components/FilterBar";
 import StatsView from "./components/StatsView";
 
+function isOverdueTask(task) {
+  if (!task.due_date || task.status === "done") return false;
+  return new Date(task.due_date) < new Date();
+}
+
+function isTodoTask(task) {
+  return task.status !== "done" && !isOverdueTask(task);
+}
+
+function getTaskCounts(taskList) {
+  return taskList.reduce(
+    (counts, task) => {
+      if (task.status === "done") {
+        counts.done += 1;
+      } else if (!isOverdueTask(task)) {
+        counts.todo += 1;
+      }
+
+      if (isOverdueTask(task)) {
+        counts.overdue += 1;
+      }
+
+      return counts;
+    },
+    { todo: 0, overdue: 0, done: 0 }
+  );
+}
+
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
   const [authView, setAuthView] = useState("login");
 
+  const [allTasks, setAllTasks] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [tags, setTags] = useState([]);
   const [stats, setStats] = useState(null);
@@ -28,8 +57,12 @@ export default function App() {
   const loadTasks = useCallback(async () => {
     setTasksLoading(true);
     try {
-      const data = await api.listTasks(filters);
-      setTasks(data);
+      const requestFilters = { ...filters };
+      delete requestFilters.status;
+
+      const data = await api.listTasks(requestFilters);
+      setAllTasks(data);
+      setTasks(applyTaskFilter(data));
     } catch (err) {
       console.error(err);
     } finally {
@@ -53,77 +86,117 @@ export default function App() {
   }, [user, loadTasks]);
 
   useEffect(() => {
+    setTasks(applyTaskFilter(allTasks));
+  }, [allTasks, filters.status]);
+
+  useEffect(() => {
     if (!user) return;
     loadTags();
     loadStats();
   }, [user, loadTags, loadStats]);
 
+  function applyTaskFilter(nextTasks) {
+    const status = filters.status;
+
+    if (status === "todo") {
+      return nextTasks.filter((task) => isTodoTask(task));
+    }
+
+    if (status === "done") {
+      return nextTasks.filter((task) => task.status === "done");
+    }
+
+    if (status === "overdue") {
+      return nextTasks.filter((task) => isOverdueTask(task));
+    }
+
+    return nextTasks;
+  }
+
   function handleTaskCreated(task, replaceId, errorMessage) {
     if (errorMessage) {
+      setAllTasks((prev) => prev.filter((t) => !String(t.id).startsWith("temp-")));
       setTasks((prev) => prev.filter((t) => !String(t.id).startsWith("temp-")));
       alert(`Could not save task: ${errorMessage}`);
       return;
     }
+
+    setAllTasks((prev) => {
+      const updatedTasks = replaceId
+        ? prev.map((t) => (t.id === replaceId ? task : t))
+        : [task, ...prev];
+
+      setTasks(applyTaskFilter(updatedTasks));
+      return updatedTasks;
+    });
+
     if (replaceId) {
-      setTasks((prev) => prev.map((t) => (t.id === replaceId ? task : t)));
       loadStats();
-    } else {
-      setTasks((prev) => [task, ...prev]);
     }
   }
 
   function handleTaskUpdated(updatedTask) {
-    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+    const updatedTasks = allTasks.map((t) => (t.id === updatedTask.id ? updatedTask : t));
+    setAllTasks(updatedTasks);
+    setTasks(applyTaskFilter(updatedTasks));
     setEditingTask(null);
     loadStats();
   }
 
   async function handleToggle(task) {
-    const previous = tasks;
+    const previous = allTasks;
     const nowDone = task.status !== "done";
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === task.id
-          ? { ...t, status: nowDone ? "done" : "todo", completed_at: nowDone ? new Date().toISOString() : null }
-          : t
-      )
+    const optimisticUpdated = allTasks.map((t) =>
+      t.id === task.id
+        ? { ...t, status: nowDone ? "done" : "todo", completed_at: nowDone ? new Date().toISOString() : null }
+        : t
     );
+    setAllTasks(optimisticUpdated);
+    setTasks(applyTaskFilter(optimisticUpdated));
     try {
       const updated = await api.toggleComplete(task.id);
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+      const refreshedTasks = allTasks.map((t) => (t.id === task.id ? updated : t));
+      setAllTasks(refreshedTasks);
+      setTasks(applyTaskFilter(refreshedTasks));
       loadStats();
     } catch (err) {
-      setTasks(previous);
+      setAllTasks(previous);
+      setTasks(applyTaskFilter(previous));
       alert(`Could not update task: ${err.message}`);
     }
   }
 
   async function handleDelete(task) {
-  const previous = tasks;
-  const deletedTaskTagIds = (task.tags || []).map((t) => t.id);
-  setTasks((prev) => prev.filter((t) => t.id !== task.id));
-  if (editingTask?.id === task.id) setEditingTask(null);
-  try {
-    await api.deleteTask(task.id);
-    loadStats();
+    const previousAllTasks = allTasks;
+    const previousTags = tags;
+    const deletedTaskTagIds = (task.tags || []).map((t) => t.id);
+    const remainingTasks = allTasks.filter((t) => t.id !== task.id);
+    setAllTasks(remainingTasks);
+    setTasks(applyTaskFilter(remainingTasks));
+    if (editingTask?.id === task.id) setEditingTask(null);
 
-    // after deleting, check if any of this task's tags are now unused
-    // by any remaining task, and delete them automatically
-    const remainingTasks = tasks.filter((t) => t.id !== task.id);
-    const tagsToRemove = deletedTaskTagIds.filter(
-      (tagId) => !remainingTasks.some((t) => t.tags?.some((tag) => tag.id === tagId))
-    );
-    for (const tagId of tagsToRemove) {
-      await api.deleteTag(tagId);
+    try {
+      await api.deleteTask(task.id);
+      loadStats();
+
+      const tagsToRemove = deletedTaskTagIds.filter(
+        (tagId) => !remainingTasks.some((t) => t.tags?.some((tag) => tag.id === tagId))
+      );
+
+      for (const tagId of tagsToRemove) {
+        await api.deleteTag(tagId);
+      }
+
+      if (tagsToRemove.length > 0) {
+        setTags((prev) => prev.filter((t) => !tagsToRemove.includes(t.id)));
+      }
+    } catch (err) {
+      setAllTasks(previousAllTasks);
+      setTasks(applyTaskFilter(previousAllTasks));
+      setTags(previousTags);
+      alert(`Could not delete task: ${err.message}`);
     }
-    if (tagsToRemove.length > 0) {
-      setTags((prev) => prev.filter((t) => !tagsToRemove.includes(t.id)));
-    }
-  } catch (err) {
-    setTasks(previous);
-    alert(`Could not delete task: ${err.message}`);
   }
-}
 
   async function handleDeleteTag(tagId) {
     if (!window.confirm("Delete this tag? It will be removed from any tasks using it.")) return;
@@ -137,8 +210,10 @@ export default function App() {
     }
   }
 
+  const taskCountByStatus = getTaskCounts(allTasks);
+
   const unusedTags = tags.filter(
-    (tag) => !tasks.some((task) => task.tags?.some((t) => t.id === tag.id))
+    (tag) => !allTasks.some((task) => task.tags?.some((t) => t.id === tag.id))
   );
 
   if (authLoading) return null;
@@ -166,14 +241,14 @@ export default function App() {
         </div>
       </header>
 
-      <StatsView stats={stats} />
+      <StatsView stats={stats} tasks={allTasks} />
 
       <div className="main-grid">
         <FilterBar
           filters={filters}
           setFilters={setFilters}
           tags={tags}
-          taskCountByStatus={stats?.status_breakdown}
+          taskCountByStatus={taskCountByStatus}
           unusedTags={unusedTags}
           onDeleteTag={handleDeleteTag}
         />
