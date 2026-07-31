@@ -23,6 +23,15 @@ export default function FilterBar({ filters, setFilters, tags, taskCountByStatus
   return (
     <div className="sidebar">
       <div className="card sidebar-section">
+        <h3>Search</h3>
+        <input
+          type="search"
+          placeholder="Search tasks..."
+          value={filters.search || ""}
+          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+        />
+      </div>
+      <div className="card sidebar-section">
         <h3>Status</h3>
         <div className="filter-group">
           {STATUSES.map((s) => (

@@ -47,6 +47,7 @@ export default function App() {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [editingTask, setEditingTask] = useState(null); 
   const [filters, setFilters] = useState({
+    search: "",
     status: undefined,
     priority: undefined,
     tag_id: undefined,
@@ -59,6 +60,7 @@ export default function App() {
     try {
       const requestFilters = { ...filters };
       delete requestFilters.status;
+      delete requestFilters.search;
 
       const data = await api.listTasks(requestFilters);
       setAllTasks(data);
@@ -87,7 +89,7 @@ export default function App() {
 
   useEffect(() => {
     setTasks(applyTaskFilter(allTasks));
-  }, [allTasks, filters.status]);
+  }, [allTasks, filters]);
 
   useEffect(() => {
     if (!user) return;
@@ -96,21 +98,27 @@ export default function App() {
   }, [user, loadTags, loadStats]);
 
   function applyTaskFilter(nextTasks) {
+    let filteredTasks = [...nextTasks];
     const status = filters.status;
+    const search = filters.search?.trim().toLowerCase();
 
     if (status === "todo") {
-      return nextTasks.filter((task) => isTodoTask(task));
+      filteredTasks = filteredTasks.filter((task) => isTodoTask(task));
+    } else if (status === "done") {
+      filteredTasks = filteredTasks.filter((task) => task.status === "done");
+    } else if (status === "overdue") {
+      filteredTasks = filteredTasks.filter((task) => isOverdueTask(task));
     }
 
-    if (status === "done") {
-      return nextTasks.filter((task) => task.status === "done");
+    if (search) {
+      filteredTasks = filteredTasks.filter((task) => {
+        return [task.title, task.description]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(search));
+      });
     }
 
-    if (status === "overdue") {
-      return nextTasks.filter((task) => isOverdueTask(task));
-    }
-
-    return nextTasks;
+    return filteredTasks;
   }
 
   function handleTaskCreated(task, replaceId, errorMessage) {
